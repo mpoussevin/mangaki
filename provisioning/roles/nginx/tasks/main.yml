@@ -1,0 +1,41 @@
+---
+
+- name: Add NGINX signing key
+  apt_key:
+    url: "http://nginx.org/keys/nginx_signing.key"
+
+- name: Add NGINX APT repository
+  apt_repository: repo='deb http://nginx.org/packages/debian/ {{ansible_distribution_release}} nginx' state=present
+
+- name: Add NGINX source APT repository
+  apt_repository: repo='deb-src http://nginx.org/packages/debian/ {{ansible_distribution_release}} nginx' state=present
+
+- name: Ensure NGINX is installed at the latest version
+  apt: name=nginx state=latest
+
+- name: Create vhosts sites folders
+  directory: path=/etc/nginx/{{item}} state=present
+  with_items:
+          - sites-enabled
+          - sites-available
+
+- name: Copy NGINX configuration
+  file: state=present src=nginx.j2 dest=/etc/nginx/nginx.conf
+
+- name: Disable default website
+  file: state=absent path=/etc/nginx/sites-enabled/default
+  notify:
+    - reload nginx
+
+- name: Make Mangaki site available
+  template: src=mangaki.conf.j2 dest=/etc/nginx/sites-available/mangaki.conf
+  notify:
+    - reload nginx
+
+- name: Enable Mangaki site
+  file: state=link src=/etc/nginx/sites-available/mangaki.conf dest=/etc/nginx/sites-enabled/mangaki.conf
+  notify:
+    - reload nginx
+
+- name: Start the NGINX service
+  service: name=nginx state=started enabled=yes

@@ -1,0 +1,12 @@
+---
+
+mangaki_app_servers: 
+  - "127.0.0.1:8000"
+
+mangaki_hostnames:
+  - "_"
+
+worker_processes: "{{ ansible_processor_vcpus }}"
+max_clients: 512
+
+
