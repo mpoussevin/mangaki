@@ -1,0 +1,40 @@
+---
+- hosts: webservers
+  gather_facts: yes
+  remote_user: "root"
+  roles:
+    - common
+    - python
+    - db
+    - nginx
+  vars_files:
+    - vars/mangaki.yml
+    - vars/secret.yml
+  tasks:
+    - name: Ensure Mangaki packages dependencies are installed
+      apt: name={{item}} state=present
+      with_items:
+        - python3-lxml
+        - gunicorn
+        - supervisord
+    - name: Create a virtualenv for Mangaki
+      command: virtualenv -p python3 --system-site-packages {{mangaki_venv}}
+        creates={{mangaki_venv}}/bin/activate
+    - name: Install Mangaki requirements inside of the virtualenv
+      pip: virtualenv={{mangaki_venv}} requirements={{mangaki_repo}}/requirements.txt
+    - name: Configure Mangaki settings
+      template: src=./templates/settings.prod.j2 dest="{{mangaki_app}}/settings.py"
+    - name: Migrate the DB
+      django_manage: command=migrate virtualenv={{mangaki_venv}} app_path={{mangaki_app}}
+    - name: Load the fixtures in the DB
+      django_manage: command=loaddata fixtures={{mangaki_fixtures}} app_path={{mangaki_app} virtualenv={{mangaki_venv}}
+    - name: Enable ranking generation everyday
+      cron: name="Generate Mangaki rankings" job= "{{mangaki_venv}}/bin/python {{mangaki_app}}/manage.py ranking"
+    - name: Enable top generation everyday
+      cron: name="Generate Mangaki top directors" job= "{{mangaki_venv}}/bin/python {{mangaki_app}}/manage.py top"
+    - name: Copy gunicorn config file
+      copy: state=present src=./templates/gunicorn.prod.conf.j2 dest={{mangaki_app}}/gunicorn.conf
+    - name: Copy supervisor for Gunicorn config file
+      copy: state=present src=./templates/supervisor.gunicorn.conf.j2 dest={{mangaki_root}}/supervisor.conf
+    - name: Add Mangaki app server to supervise
+      supervisorctl: name=mangaki state=started
